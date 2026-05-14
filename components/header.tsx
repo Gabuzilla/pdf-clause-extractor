@@ -1,16 +1,25 @@
 "use client"
 
-import { FileText, X, Moon, Sun } from "lucide-react"
+import { FileText, X, Moon, Sun, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useState, useEffect } from "react"
+import { logout } from "@/app/login/actions"
 
 interface HeaderProps {
   fileName: string | null
   onClear: () => void
   hasDocument: boolean
+  user: { email?: string } | null
 }
 
-export function Header({ fileName, onClear, hasDocument }: HeaderProps) {
+export function Header({ fileName, onClear, hasDocument, user }: HeaderProps) {
   const [isDark, setIsDark] = useState(true)
 
   useEffect(() => {
@@ -51,6 +60,33 @@ export function Header({ fileName, onClear, hasDocument }: HeaderProps) {
             <X className="h-4 w-4 mr-1" />
             Fechar
           </Button>
+        )}
+
+        {user && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-2 text-muted-foreground">
+                <User className="h-4 w-4" />
+                <span className="hidden sm:block max-w-[140px] truncate text-xs">
+                  {user.email}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                {user.email}
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <form action={logout} className="w-full">
+                  <button type="submit" className="flex items-center gap-2 w-full text-sm cursor-pointer">
+                    <LogOut className="h-4 w-4" />
+                    Sair
+                  </button>
+                </form>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </header>

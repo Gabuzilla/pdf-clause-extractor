@@ -3,23 +3,33 @@
 import { useState, useRef, useCallback, type ChangeEvent } from "react"
 import type { PDFDocumentProxy, TextItem } from "pdfjs-dist/types/src/display/api"
 import JSZip from "jszip"
+import { toast } from "sonner"
 import { Header } from "./header"
 import { PdfViewer } from "./pdf-viewer"
 import { ClauseEditor } from "./clause-editor"
 import { UploadZone } from "./upload-zone"
 import { StatsBar } from "./stats-bar"
+import { LoadDocumentDialog } from "./load-document-dialog"
+import { saveDocument, loadDocument } from "@/app/actions/documents"
 
 export interface Clause {
   id: number
   text: string
 }
 
-export function PdfClauseExtractor() {
+interface PdfClauseExtractorProps {
+  user: { email?: string } | null
+}
+
+export function PdfClauseExtractor({ user }: PdfClauseExtractorProps) {
   const [clauses, setClauses] = useState<Clause[]>([])
   const [loading, setLoading] = useState<boolean>(false)
+  const [saving, setSaving] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
   const [pageCount, setPageCount] = useState<number>(0)
+  const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null)
+  const [showLoadDialog, setShowLoadDialog] = useState(false)
 
   const viewerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -33,6 +43,7 @@ export function PdfClauseExtractor() {
     setClauses([])
     setFileName(file.name)
     setPageCount(0)
+    setCurrentDocumentId(null)
 
     if (viewerRef.current) {
       viewerRef.current.innerHTML = ""
@@ -117,9 +128,10 @@ export function PdfClauseExtractor() {
       }))
 
       setClauses(mapped)
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao processar o PDF. Verifique se o arquivo é válido."
       console.error(err)
-      setError(err.message || "Erro ao processar o PDF. Verifique se o arquivo é válido.")
+      setError(message)
       setClauses([])
     } finally {
       setLoading(false)
@@ -149,6 +161,43 @@ export function PdfClauseExtractor() {
 
   const handleEditClause = useCallback((id: number, newText: string) => {
     setClauses((prev) => prev.map((c) => (c.id === id ? { ...c, text: newText } : c)))
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    if (!fileName || clauses.length === 0) return
+    setSaving(true)
+    try {
+      const result = await saveDocument(
+        { fileName, pageCount, clauses },
+        currentDocumentId ?? undefined
+      )
+      if (result.success && result.documentId) {
+        setCurrentDocumentId(result.documentId)
+        toast.success("Documento salvo com sucesso!")
+      } else {
+        toast.error(result.error ?? "Erro ao salvar.")
+      }
+    } finally {
+      setSaving(false)
+    }
+  }, [fileName, pageCount, clauses, currentDocumentId])
+
+  const handleLoadDocument = useCallback(async (documentId: string) => {
+    const result = await loadDocument(documentId)
+    if (result.success && result.document && result.clauses) {
+      setFileName(result.document.file_name)
+      setPageCount(result.document.page_count)
+      setClauses(result.clauses)
+      setCurrentDocumentId(documentId)
+      setShowLoadDialog(false)
+      setError(null)
+      if (viewerRef.current) {
+        viewerRef.current.innerHTML = ""
+      }
+      toast.success("Cláusulas carregadas! Faça upload do PDF para visualizá-lo.")
+    } else {
+      toast.error(result.error ?? "Erro ao carregar.")
+    }
   }, [])
 
   const handleExport = useCallback(async () => {
@@ -204,6 +253,7 @@ export function PdfClauseExtractor() {
     setFileName(null)
     setPageCount(0)
     setError(null)
+    setCurrentDocumentId(null)
     if (viewerRef.current) {
       viewerRef.current.innerHTML = ""
     }
@@ -217,7 +267,12 @@ export function PdfClauseExtractor() {
 
   return (
     <div className="flex flex-col h-screen">
-      <Header fileName={fileName} onClear={handleClear} hasDocument={hasDocument} />
+      <Header
+        fileName={fileName}
+        onClear={handleClear}
+        hasDocument={hasDocument}
+        user={user}
+      />
 
       {!hasDocument ? (
         <UploadZone onFileChange={handleFileChange} loading={loading} error={error} fileInputRef={fileInputRef} />
@@ -227,7 +282,10 @@ export function PdfClauseExtractor() {
             pageCount={pageCount}
             clauseCount={clauses.length}
             loading={loading}
+            saving={saving}
             onExport={handleExport}
+            onSave={handleSave}
+            onLoadDocument={() => setShowLoadDialog(true)}
             hasClauses={hasClauses}
           />
 
@@ -245,6 +303,12 @@ export function PdfClauseExtractor() {
           </div>
         </>
       )}
+
+      <LoadDocumentDialog
+        open={showLoadDialog}
+        onOpenChange={setShowLoadDialog}
+        onSelect={handleLoadDocument}
+      />
     </div>
   )
 }

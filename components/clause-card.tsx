@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import { Trash2, GripVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -9,26 +9,64 @@ import type { Clause } from "./pdf-clause-extractor"
 interface ClauseCardProps {
   clause: Clause
   index: number
-  onDelete: () => void
-  onEdit: (newText: string) => void
+  onDelete: (id: number) => void
+  onEdit: (id: number, newText: string) => void
 }
 
-export function ClauseCard({ clause, index, onDelete, onEdit }: ClauseCardProps) {
+export const ClauseCard = React.memo(function ClauseCard({
+  clause,
+  index,
+  onDelete,
+  onEdit,
+}: ClauseCardProps) {
   const [isFocused, setIsFocused] = useState(false)
+  const [localText, setLocalText] = useState(clause.text)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Sync from parent only when clause.text changes externally (e.g. load from DB)
+  useEffect(() => {
+    setLocalText(clause.text)
+  }, [clause.text])
+
+  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
     }
-  }, [clause.text])
+  }, [localText])
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    }
+  }, [])
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = e.target.value
+      setLocalText(value)
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+      debounceTimer.current = setTimeout(() => {
+        onEdit(clause.id, value)
+      }, 400)
+    },
+    [clause.id, onEdit]
+  )
+
+  const handleDelete = useCallback(() => {
+    onDelete(clause.id)
+  }, [clause.id, onDelete])
 
   return (
     <div
       className={cn(
         "group rounded-lg border bg-card transition-all duration-200",
-        isFocused ? "border-accent ring-1 ring-accent/20" : "border-border hover:border-muted-foreground/30",
+        isFocused
+          ? "border-accent ring-1 ring-accent/20"
+          : "border-border hover:border-muted-foreground/30"
       )}
     >
       <div className="flex items-start gap-2 p-3">
@@ -42,8 +80,8 @@ export function ClauseCard({ clause, index, onDelete, onEdit }: ClauseCardProps)
         <div className="flex-1 min-w-0">
           <textarea
             ref={textareaRef}
-            value={clause.text}
-            onChange={(e) => onEdit(e.target.value)}
+            value={localText}
+            onChange={handleChange}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder="Digite o texto da cláusula..."
@@ -55,7 +93,7 @@ export function ClauseCard({ clause, index, onDelete, onEdit }: ClauseCardProps)
         <Button
           variant="ghost"
           size="icon"
-          onClick={onDelete}
+          onClick={handleDelete}
           className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -63,4 +101,4 @@ export function ClauseCard({ clause, index, onDelete, onEdit }: ClauseCardProps)
       </div>
     </div>
   )
-}
+})
