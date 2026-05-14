@@ -191,9 +191,6 @@ export function PdfClauseExtractor({ user }: PdfClauseExtractorProps) {
       setCurrentDocumentId(documentId)
       setShowLoadDialog(false)
       setError(null)
-      if (viewerRef.current) {
-        viewerRef.current.innerHTML = ""
-      }
       toast.success("Cláusulas carregadas! Faça upload do PDF para visualizá-lo.")
     } else {
       toast.error(result.error ?? "Erro ao carregar.")
